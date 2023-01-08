@@ -1,0 +1,16 @@
+async-generator
+async-timeout
+loguru
+psutil
+python-crontab
+python-dateutil
+requests
+selenium
+selenium-wire
+SQLAlchemy
+urllib3
+undetected-chromedriver
+pyOpenSSL
+httpx
+httpx_socks
+rich
