@@ -3,11 +3,15 @@ from src.base import *
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 # import seleniumwire.webdriver as driver
-import undetected_chromedriver as driver
+# import undetected_chromedriver as driver
+import seleniumwire.undetected_chromedriver as driver
+from selenium_stealth import stealth
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 import httpx, asyncio, tempfile, pickle
 # from httpx_socks import AsyncProxyTransport
-
+from fake_useragent import UserAgent
 
 
 class WebClient():
@@ -130,20 +134,10 @@ class WebClient():
 		return proxy
 
 	@log.catch()
-	def random_useragent():
-		if not os.path.isfile(os.path.join('data','useragents.txt')):
-			log.warning("No useragents file found. Please create a text file in 'data/useragents.txt'")
-			return False
-		
-		from random import choice
-		
-		with open(os.path.join('data','useragents.txt'), 'r', encoding='utf-8') as f:
-			lines = f.readlines()
-			if len(lines) == 0: 
-				log.warning("Useragents file is empty")
-				return False
-			return choice(lines).replace('\n','').strip()
-
+	def random_useragent(self):
+		ua = UserAgent()
+		userAgent = ua.random
+		return userAgent
 	
 	@log.catch()
 	def initialize_driver(self):
@@ -168,16 +162,22 @@ class WebClient():
 			options.add_argument('--allow-file-access-from-files')
 			# options.add_argument('--disable-web-security')
 
-			options.add_argument('--user-data-dir=' + self.user_data)
+			# options.add_argument('--user-data-dir=' + self.user_data)
 			options.add_argument('--profile-directory=Profile 1')
 			options.add_argument('--allow-profiles-outside-user-dir')
 			options.add_argument('--enable-profile-shortcut-manager')
 			options.add_argument('--profiling-flush=3')
 			options.add_argument('--enable-aggressive-domstorage-flushing')
+   
+			# Add the user agent to the ChromeOptions instance
+			ua = self.random_useragent()
+			# if ua:
+			# 	options.add_argument(f"user-agent={ua}")
 
-			# options.add_argument('--disable-blink-features=AutomationControlled')
-			# options.add_experimental_option('excludeSwitches', ['enable-automation', 'enable-logging'])
-			# options.add_experimental_option('useAutomationExtension', False)
+			# if not self.headless:
+			# 	options.add_argument('--disable-blink-features=AutomationControlled')
+			# 	options.add_experimental_option('excludeSwitches', ['enable-automation', 'enable-logging'])
+			# 	options.add_experimental_option('useAutomationExtension', False)
 
 			options.add_experimental_option('prefs', {
 				'download.default_directory': self.downloads_path,
@@ -191,14 +191,18 @@ class WebClient():
 			seleniumwire_options = {
 				'verify_ssl': False,
 				'ignore_http_methods': ['OPTIONS', 'PUT', 'DELETE'],
-				'backend': 'mitmproxy',
-				'proxy': {
-					'http': f'socks5://{self.proxy}',
-					'https': f'socks5://{self.proxy}',
-				}
+				'backend': 'mitmproxy'
 			}
+			if self.proxy:
+				seleniumwire_options['proxy'] = {
+						'http': f'socks5://{self.proxy}',
+						'https': f'socks5://{self.proxy}',
+					}
 			
-			log.error("TODO Fix proxy setting")
+			# log.error("TODO Fix proxy setting") # seems to be working now
+
+			if self.headless:
+				options.add_argument('--headless')
    
 			driver_options = {
 				'options': options, 
@@ -208,9 +212,6 @@ class WebClient():
 
 
 			if self.version != 0: driver_options['version_main'] = int(self.version)
-
-			if self.headless:
-				options.add_argument('--headless')
 
 			self.driver: Optional[driver.Chrome] = driver.Chrome(**driver_options,
 																 desired_capabilities=options.to_capabilities())
@@ -223,8 +224,9 @@ class WebClient():
 
 			self.driver.execute("send_command", params)
 
-			# stealth(self.driver, platform='Win32',  # noqa
-			# 		user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.5060.53 Safari/537.36 Edg/103.0.1264.37')
+			# stealth mode. seems to be required for headless and anti-bot detection
+			stealth(self.driver, platform='Win32',  # noqa
+					user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.5060.53 Safari/537.36 Edg/103.0.1264.37')
 		except Exception as e:
 			log.error(e)
 			return False
@@ -249,12 +251,15 @@ class WebClient():
 	def load_cookies(self):
 
 		if self.has_cookies():
-			cookies = pickle.load(open(os.path.join("data","cookies.pkl"),"rb"))
-			for cookie in cookies:
-				self.driver.add_cookie(cookie)
-			log.info("Successfully loaded Cookies.")
-			return True
-			# os.remove(os.path.join("data","cookies.pkl"))
+			try:
+				cookies = pickle.load(open(os.path.join("data","cookies.pkl"),"rb"))
+				for cookie in cookies:
+					self.driver.add_cookie(cookie)
+				log.info("Successfully loaded Cookies.")
+				return True
+			except:
+				os.remove(os.path.join("data","cookies.pkl"))
+    
 		return False
 			  
 	@log.catch()
@@ -266,9 +271,21 @@ class WebClient():
 	def load_and_check(self, URL, title=""):     
 		try:
 			self.driver.get(URL)
-			self.driver.implicitly_wait(5)  # wait a bit
+			self.driver.implicitly_wait(30)  # wait a bit
 			time.sleep(3)
+			if not title: return True
+   
+			# Define a custom condition
+			def element_has_text(driver):
+				# element = driver.find_element(By.TAG_NAME, "title")
+				element = driver.title
+				return title in element
 
+			log.debug("Waiting for title to contain the following text: "+title)
+
+			# Wait for the custom condition to be met
+			WebDriverWait(self.driver, 120).until(element_has_text)
+   
 			if title and not title in self.driver.title:
 				log.error("Wrong Page title:" + str(self.driver.title) )
 				return False
@@ -280,11 +297,10 @@ class WebClient():
 			return False
 
 	@log.catch()
-	def test_ip(self):
+	def what_is_my_ip(self):
 		self.driver.get("https://api.ipify.org")
-		log.debug("Sleeping for 30 seconds.")
-		time.sleep(30)
-		sys.exit(0)
+		# print(self.driver.page_source)
+		return self.driver.page_source
 	 
 	@log.catch()
 	def open_browser(self, value=True):

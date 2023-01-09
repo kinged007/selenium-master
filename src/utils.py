@@ -326,3 +326,58 @@ def isfloat(num):
 ###################################################################################################
 ###################################################################################################
 
+# setting cron job
+# see https://pypi.org/project/python-crontab/ 
+@log.catch()
+def create_cron(name='',minutes="0",hours="*",days_of_month="*",days_of_week="*",month="*"):
+	basepath = os.path.dirname(os.path.dirname(__file__))
+	
+	if platform=='win32':
+		os.system('cls')	
+		print("""
+████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████
+█░░░░░░░░░░█░░░░░░██████████░░░░░░█░░░░░░░░░░░░░░█░░░░░░░░░░░░░░█░░░░░░░░░░░░░░░░███░░░░░░░░░░░░░░█░░░░░░░░░░░░░░█░░░░░░██████████░░░░░░█░░░░░░░░░░░░░░█
+█░░▄▀▄▀▄▀░░█░░▄▀░░░░░░░░░░░░░░▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀▄▀░░███░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀░░░░░░░░░░██░░▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█
+█░░░░▄▀░░░░█░░▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀░░█░░▄▀░░░░░░▄▀░░█░░▄▀░░░░░░▄▀░░█░░▄▀░░░░░░░░▄▀░░███░░░░░░▄▀░░░░░░█░░▄▀░░░░░░▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░██░░▄▀░░█░░░░░░▄▀░░░░░░█
+███░░▄▀░░███░░▄▀░░░░░░▄▀░░░░░░▄▀░░█░░▄▀░░██░░▄▀░░█░░▄▀░░██░░▄▀░░█░░▄▀░░████░░▄▀░░███████░░▄▀░░█████░░▄▀░░██░░▄▀░░█░░▄▀░░░░░░▄▀░░██░░▄▀░░█████░░▄▀░░█████
+███░░▄▀░░███░░▄▀░░██░░▄▀░░██░░▄▀░░█░░▄▀░░░░░░▄▀░░█░░▄▀░░██░░▄▀░░█░░▄▀░░░░░░░░▄▀░░███████░░▄▀░░█████░░▄▀░░░░░░▄▀░░█░░▄▀░░██░░▄▀░░██░░▄▀░░█████░░▄▀░░█████
+███░░▄▀░░███░░▄▀░░██░░▄▀░░██░░▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀░░██░░▄▀░░█░░▄▀▄▀▄▀▄▀▄▀▄▀░░███████░░▄▀░░█████░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀░░██░░▄▀░░██░░▄▀░░█████░░▄▀░░█████
+███░░▄▀░░███░░▄▀░░██░░░░░░██░░▄▀░░█░░▄▀░░░░░░░░░░█░░▄▀░░██░░▄▀░░█░░▄▀░░░░░░▄▀░░░░███████░░▄▀░░█████░░▄▀░░░░░░▄▀░░█░░▄▀░░██░░▄▀░░██░░▄▀░░█████░░▄▀░░█████
+███░░▄▀░░███░░▄▀░░██████████░░▄▀░░█░░▄▀░░█████████░░▄▀░░██░░▄▀░░█░░▄▀░░██░░▄▀░░█████████░░▄▀░░█████░░▄▀░░██░░▄▀░░█░░▄▀░░██░░▄▀░░░░░░▄▀░░█████░░▄▀░░█████
+█░░░░▄▀░░░░█░░▄▀░░██████████░░▄▀░░█░░▄▀░░█████████░░▄▀░░░░░░▄▀░░█░░▄▀░░██░░▄▀░░░░░░█████░░▄▀░░█████░░▄▀░░██░░▄▀░░█░░▄▀░░██░░▄▀▄▀▄▀▄▀▄▀░░█████░░▄▀░░█████
+█░░▄▀▄▀▄▀░░█░░▄▀░░██████████░░▄▀░░█░░▄▀░░█████████░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀░░██░░▄▀▄▀▄▀░░█████░░▄▀░░█████░░▄▀░░██░░▄▀░░█░░▄▀░░██░░░░░░░░░░▄▀░░█████░░▄▀░░█████
+█░░░░░░░░░░█░░░░░░██████████░░░░░░█░░░░░░█████████░░░░░░░░░░░░░░█░░░░░░██░░░░░░░░░░█████░░░░░░█████░░░░░░██░░░░░░█░░░░░░██████████░░░░░░█████░░░░░░█████
+████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████
+		""")
+		print("Because you are using Windows system, you need to set up the following cron job using Windows Task Scheduler. We can't do it automatically for you. Sorry.")
+		print("Instructions:")
+		print("1) Open Task Scheduler and Create Task (NOT Basic Task!).")
+		if name: print(f"2) Give Name '{name}'.")
+		else: print(f"2) Give a useful Name you will use to identify it.")
+		print("3) Check 'Run whether user is logged in or not'.")
+		print("4) Add New Trigger and set it to Daily, recuring every X day.")
+		print("5) Change Advanced Settings: Specify repeat settings. Uncheck 'Expire' and click Ok.")
+		print("6) Add New Action: Start a Program.")
+		print("7) Program/Script: "+os.path.join(basepath, 'run.bat'))
+		# print("8) Additional Arguments (in this order!) : --cron --run")
+		print("")		
+		input(" [?] Press Enter to continue...")
+
+	else:
+		
+		from crontab import CronTab
+		cron = CronTab(user=True)
+		if len(list(cron.find_comment(name))) == 0:
+			# job = cron.new(command=" ".join([sys.executable,os.path.join(DIR['BASE'],"Cron.py"),"--run"]))
+			# job = cron.new(command=" ".join(['sh',os.path.join(DIR['BASE'],"runx.sh"),"--cron","--run"]))
+			job = cron.new(command=" ".join(['sh',os.path.join(basepath,"run.sh"),"--cron","--run",">>",os.path.join(basepath,'logs',"cron_output.log"),"2>&1"]))
+			# job.minute.every(5)
+			job.setall(f'{minutes} {hours} {days_of_month} {month} {days_of_week}')
+
+			job.set_comment(name)
+			cron.write()
+			print("Successfully set up Cron Job")
+   
+   
+
+      

@@ -1,6 +1,19 @@
 from src.base import *
 from src.webclient import *
 
+from datetime import datetime
+import calendar, shutil
+
+def last_day_of_month(year, month):
+	# Get the number of days in the month
+	num_days = calendar.monthrange(year, month)[1]
+
+	# Create a date object for the last day of the month
+	last_day = datetime(year, month, num_days)
+
+	return num_days
+
+make_path("data/transaction_reports/")
 
 """
 
@@ -10,52 +23,83 @@ from src.webclient import *
  
 """
 def start_execution():
-    
+	
+	# figure out the dates to use
+	currentMonth = datetime.now().month - 1 
+	currentYear = datetime.now().year
+	prevMonth = 12 if currentMonth<1 else currentMonth
+	currentYear = currentYear-1 if prevMonth == 12 else currentYear
+	print(os.path.exists(os.path.join('data','transaction_reports',f'{currentYear}-{prevMonth}.csv')))
+	return
+	if os.path.exists(os.path.join('data','transaction_reports',f'{currentYear}-{prevMonth}.csv')): 
+		print("Already have report. Aborting.")
+		return
+	
 	# client.test_ip()
- 
+	time.sleep(2)
+	   
+	URL = "https://business.currenciesdirect.com/businessportal/transactions.htm?search_criteria_name=default_activity_history"
 	
+ 	# load page
+	client.load_and_check(URL)
 
-	URL = "https://www.xt.com/tradePro/snack_usdt"
-
-	if not client.load_and_check(URL, title="XT.COM"):
-		client.cleanup()
-		sys.exit(0)
-
-	log.info(f"Successfully loaded '{URL}'")
-
-	time.sleep(7)
-
-	button = client.driver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/div/div[2]/div[2]/div[2]/div[2]/div[2]/button/span')
-	if 'login' in button.text.lower():
-		# load cookies
-		if client.load_cookies():
-			client.driver.get(URL)
-		else:
-			log.info("Requires Manual Login...")
-			client.driver.get('https://accounts.xt.com/en-US/login?backurl=https%3A%2F%2Fwww.xt.com%2FtradePro%2Fsnack_usdt')
-
-	# token has expired. Restart
+	# load saved cookies
+	# if client.load_cookies():
+	# 	client.driver.get(URL)
+	
+	# Accept cookie policy
 	try:
-		token_expire = client.driver.find_element(By.XPATH, '/html/body/div[4]/div/div[2]/div[1]')
-		if token_expire and 'expire' in token_expire.text.lower():
-			log.debug("Expired token!")
-			return start_execution()
-	except:
-		pass
+		client.driver.find_element(By.CSS_SELECTOR, '#onetrust-accept-btn-handler').click()
+	except Exception as e:
+		print(f"[red]{e}[/red]")
+
+	# Choose English
+	try:
+		client.driver.find_element(By.CSS_SELECTOR, '#langselectionDiv > div > div:nth-child(1)').click()
+	except Exception as e:
+		print(f"[red]{e}[/red]")
 	
+	# check if need to login
+	try:
+		time.sleep(1)
+		client.driver.find_element(By.CSS_SELECTOR, '#loginEmail').send_keys(config.get('App','email'))
+		time.sleep(2)
+		client.driver.find_element(By.CSS_SELECTOR, '#loginPassword').send_keys(config.get('App','password', raw=True))
+		time.sleep(3)
+		client.driver.find_element(By.CSS_SELECTOR, '#emailandPassDiv > div > div.l-grid-row.m-stages--box-double-btns.is-active > button').click()
+		log.info("Logging in.")
+		time.sleep(3)
+		# client.save_cookies()
+	except Exception as e:
+		log.error(e)
+
+	# prepare dates for report
+	lastDay = last_day_of_month(currentYear, prevMonth)
+	date_from = f"01/{prevMonth}/{currentYear}"
+	date_to = f"{lastDay}/{prevMonth}/{currentYear}"
+	client.driver.get(f"https://business.currenciesdirect.com/businessportal/transactions.htm?completeCurrentPage=1&pendingCurrentPage=&fromDate={date_from}&toDate={date_to}&search_criteria_name=filter&curr=&status=CLOSED&collectionAcNo=&collectionAccountCurreny=&moneyStatus=&recipientId=&searchtext=")
 	
-	# Waiting for user to login
-	while True:
-		try:
-			button = client.driver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/div/div[2]/div[2]/div[2]/div[2]/div[2]/button/span/span')
-			if "sell" in button.text.lower(): # check element for logged in users
-				# logged in. save cookies
-				client.save_cookies()
-				break
-		except:
-			log.debug("Waiting for user to login")
-			time.sleep(5)
-			continue
+	time.sleep(3)
+	client.driver.find_element(By.CSS_SELECTOR, "#body > main > div.grid-x > div > div > div > div > div > div > a").click()
+	client.driver.find_element(By.CSS_SELECTOR, "#body > main > div.grid-x > div > div > div > div > div > div > div > ul > li:nth-child(1) > a").click()
+	
+	time.sleep(10)
+	files = os.listdir(client.downloads_path)
+	if len(files) > 0:
+		# Set the source and destination paths
+		src_path = os.path.join(client.downloads_path,files[0])
+		dst_path = os.path.join('data','transaction_reports',f'{currentYear}-{prevMonth}.csv')
+
+		# Copy the file to the destination
+		shutil.copy(src_path, dst_path)
+		log.info(f"Downloaded report for {currentYear}-{prevMonth}.")
+	else:
+		log.error("Could not download any files.")
+  
+	time.sleep(5)
+ 
+	return
+  
 
 	log.info("Ready to perform App logic.")
  
@@ -68,56 +112,7 @@ def start_execution():
  
 """
 def run_app_logic():
-    
-	snack_balance_elem = client.driver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/div/div[2]/div[2]/div[2]/div[2]/div[2]/div[1]/div[1]/span/b')
-	usdt_balance_elem = client.driver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/div/div[2]/div[2]/div[2]/div[2]/div[1]/div[1]/div/span/b')
-	exch_price = client.driver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/div/div[1]/div[2]/div[1]/div[3]/div[2]/div/span/b').text
-	buy_price = client.driver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/div/div[1]/div[2]/div[1]/div[3]/div[3]/div[1]/div[2]/div[1]/span').text
-	log.debug(buy_price)
-
-	snack_balance = float(snack_balance_elem.text.replace(",",""))
-	usdt_balance = float(usdt_balance_elem.text.replace(",",""))
-	log.info(f"Current Balance: {snack_balance} SNACK" )
-	log.info(f"Current Balance: {usdt_balance} USDT" )
-	log.info(f"Current Price: 1 SNACK = {exch_price} USDT" )
-
-	sell_amount = float(config.get('App','sell_token_amount',fallback='0'))
-
-	if snack_balance > sell_amount:
-		log.info("Sufficient balance to sell")
-
-		time.sleep(17)
-
-		exch_price = client.driver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/div/div[1]/div[2]/div[1]/div[3]/div[2]/div/span/b').text.replace(',','')
-
-		if 'market' in config.get('App','market_or_limit',fallback='market').lower():
-			client.driver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/div/div[2]/div[2]/div[2]/div[1]/div/button[2]').click()
-			sale_price = exch_price
-		else:
-			client.driver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/div/div[2]/div[2]/div[2]/div[1]/div/button[1]').click()
-			lp = config.get('App','limit_price',fallback=0)
-			sale_price = float(lp) if isfloat(lp) and float(lp) > 0 else buy_price
-			try:
-				limit_elem = client.driver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/div/div[2]/div[2]/div[2]/div[2]/div[2]/div[2]/div[1]/input')
-				limit_elem.clear()
-				limit_elem.send_keys(str(sale_price))
-			except Exception as e:
-				log.error(e)
-
-		log.info(f"Selling {sell_amount} SNACK tokens at {sale_price} for {sell_amount*float(sale_price):.6f} USDT")
-
-		sell_element = client.driver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/div/div[2]/div[2]/div[2]/div[2]/div[2]/div[2]/div[2]/input')
-
-		sell_element.clear()
-		sell_element.send_keys(str(sell_amount))
-
-		client.driver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/div/div[2]/div[2]/div[2]/div[2]/div[2]/button').click()
-
-	else:
-		log.warning("Insufficient token balance. ")
-
-	time.sleep(10)
-
+	pass
 
 
 
@@ -129,7 +124,7 @@ if __name__ == "__main__":
 
 	client = WebClient()
 	if client.initialize_driver():
-		client.set_window_size() # defaults to x=1920, y=1080
+		client.set_window_size(1000,700) # defaults to x=1920, y=1080
 		while client.open_browser():
 			config = load_config()
 			start_execution()
